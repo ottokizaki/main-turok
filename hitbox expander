@@ -1,0 +1,243 @@
+-- LocalScript
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Global settings
+_G.HeadSize = 4
+_G.HeadTransparency = 0.8
+_G.HeadColor = Color3.fromRGB(180, 0, 255) -- default violet
+_G.Disabled = true
+
+-- Function to expand head hitboxes
+local function expandHeads()
+    for _, v in next, Players:GetPlayers() do
+        if v.Name ~= Players.LocalPlayer.Name and v.Character and v.Character:FindFirstChild("Head") then
+            pcall(function()
+                v.Character.Head.Size = Vector3.new(_G.HeadSize, _G.HeadSize, _G.HeadSize)
+                v.Character.Head.Transparency = _G.HeadTransparency
+                v.Character.Head.Color = _G.HeadColor
+                v.Character.Head.Material = "ForceField"
+                v.Character.Head.CanCollide = false
+                v.Character.Head.Massless = true
+            end)
+        end
+    end
+end
+
+-- Loop handler
+RunService.RenderStepped:Connect(function()
+    if not _G.Disabled then
+        expandHeads()
+    end
+end)
+
+-- GUI Setup
+local player = Players.LocalPlayer
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Main frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 270, 0, 260)
+mainFrame.Position = UDim2.new(0.05, 0, 0.05, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.Parent = screenGui
+
+-- Toggle Button
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 120, 0, 40)
+toggleBtn.Position = UDim2.new(0.05, 0, 0.05, 0)
+toggleBtn.Text = "Expand OFF"
+toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Parent = mainFrame
+
+-- Reset Button
+local resetBtn = Instance.new("TextButton")
+resetBtn.Size = UDim2.new(0, 120, 0, 40)
+resetBtn.Position = UDim2.new(0.55, 0, 0.05, 0)
+resetBtn.Text = "Reset"
+resetBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 200)
+resetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+resetBtn.Parent = mainFrame
+
+---------------------------------------------------
+-- Head Size Slider (0 - 30)
+---------------------------------------------------
+local sizeSliderFrame = Instance.new("Frame")
+sizeSliderFrame.Size = UDim2.new(0, 250, 0, 50)
+sizeSliderFrame.Position = UDim2.new(0.05, 0, 0.28, 0)
+sizeSliderFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+sizeSliderFrame.Parent = mainFrame
+
+local sizeLabel = Instance.new("TextLabel")
+sizeLabel.Size = UDim2.new(1, 0, 0, 20)
+sizeLabel.BackgroundTransparency = 1
+sizeLabel.TextColor3 = Color3.fromRGB(255,255,255)
+sizeLabel.Text = "Head Size: " .. _G.HeadSize
+sizeLabel.Parent = sizeSliderFrame
+
+local sizeBar = Instance.new("Frame")
+sizeBar.Size = UDim2.new(1, 0, 0, 15)
+sizeBar.Position = UDim2.new(0, 0, 0, 25)
+sizeBar.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+sizeBar.Parent = sizeSliderFrame
+
+local sizeHandle = Instance.new("Frame")
+sizeHandle.Size = UDim2.new(0, 10, 1, 0)
+sizeHandle.Position = UDim2.new((_G.HeadSize)/30, -5, 0, 0) -- maps 0–30
+sizeHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+sizeHandle.Parent = sizeBar
+
+---------------------------------------------------
+-- Transparency Slider (0 - 1)
+---------------------------------------------------
+local transSliderFrame = Instance.new("Frame")
+transSliderFrame.Size = UDim2.new(0, 250, 0, 50)
+transSliderFrame.Position = UDim2.new(0.05, 0, 0.5, 0)
+transSliderFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+transSliderFrame.Parent = mainFrame
+
+local transLabel = Instance.new("TextLabel")
+transLabel.Size = UDim2.new(1, 0, 0, 20)
+transLabel.BackgroundTransparency = 1
+transLabel.TextColor3 = Color3.fromRGB(255,255,255)
+transLabel.Text = "Transparency: " .. _G.HeadTransparency
+transLabel.Parent = transSliderFrame
+
+local transBar = Instance.new("Frame")
+transBar.Size = UDim2.new(1, 0, 0, 15)
+transBar.Position = UDim2.new(0, 0, 0, 25)
+transBar.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+transBar.Parent = transSliderFrame
+
+local transHandle = Instance.new("Frame")
+transHandle.Size = UDim2.new(0, 10, 1, 0)
+transHandle.Position = UDim2.new(_G.HeadTransparency, -5, 0, 0) -- maps 0–1
+transHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+transHandle.Parent = transBar
+
+---------------------------------------------------
+-- Color Picker Slider (Hue)
+---------------------------------------------------
+local colorSliderFrame = Instance.new("Frame")
+colorSliderFrame.Size = UDim2.new(0, 250, 0, 50)
+colorSliderFrame.Position = UDim2.new(0.05, 0, 0.72, 0)
+colorSliderFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+colorSliderFrame.Parent = mainFrame
+
+local colorLabel = Instance.new("TextLabel")
+colorLabel.Size = UDim2.new(1, 0, 0, 20)
+colorLabel.BackgroundTransparency = 1
+colorLabel.TextColor3 = Color3.fromRGB(255,255,255)
+colorLabel.Text = "Color Picker"
+colorLabel.Parent = colorSliderFrame
+
+local colorBar = Instance.new("Frame")
+colorBar.Size = UDim2.new(1, 0, 0, 15)
+colorBar.Position = UDim2.new(0, 0, 0, 25)
+colorBar.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+colorBar.BorderSizePixel = 0
+colorBar.Parent = colorSliderFrame
+
+-- Gradient across hue spectrum
+local uiGradient = Instance.new("UIGradient")
+uiGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255,0,0)),
+    ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255,255,0)),
+    ColorSequenceKeypoint.new(0.33, Color3.fromRGB(0,255,0)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0,255,255)),
+    ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0,0,255)),
+    ColorSequenceKeypoint.new(0.83, Color3.fromRGB(255,0,255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,0))
+}
+uiGradient.Parent = colorBar
+
+local colorHandle = Instance.new("Frame")
+colorHandle.Size = UDim2.new(0, 10, 1, 0)
+colorHandle.Position = UDim2.new(0.7, -5, 0, 0) -- start on purple
+colorHandle.BackgroundColor3 = Color3.fromRGB(255,255,255)
+colorHandle.Parent = colorBar
+
+---------------------------------------------------
+-- Dragging Logic
+---------------------------------------------------
+local draggingSize = false
+local draggingTrans = false
+local draggingColor = false
+
+sizeHandle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingSize = true end
+end)
+transHandle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingTrans = true end
+end)
+colorHandle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingColor = true end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        draggingSize, draggingTrans, draggingColor = false, false, false
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    local mouseX = UserInputService:GetMouseLocation().X
+
+    if draggingSize then
+        local relativeX = math.clamp(mouseX - sizeBar.AbsolutePosition.X, 0, sizeBar.AbsoluteSize.X)
+        sizeHandle.Position = UDim2.new(relativeX/sizeBar.AbsoluteSize.X, -5, 0, 0)
+        local value = math.floor((30 * (relativeX/sizeBar.AbsoluteSize.X))) -- 0–30
+        _G.HeadSize = value
+        sizeLabel.Text = "Head Size: " .. value
+    end
+
+    if draggingTrans then
+        local relativeX = math.clamp(mouseX - transBar.AbsolutePosition.X, 0, transBar.AbsoluteSize.X)
+        transHandle.Position = UDim2.new(relativeX/transBar.AbsoluteSize.X, -5, 0, 0)
+        local value = math.floor((relativeX/transBar.AbsoluteSize.X)*100)/100 -- 0–1
+        _G.HeadTransparency = value
+        transLabel.Text = "Transparency: " .. value
+    end
+
+    if draggingColor then
+        local relativeX = math.clamp(mouseX - colorBar.AbsolutePosition.X, 0, colorBar.AbsoluteSize.X)
+        colorHandle.Position = UDim2.new(relativeX/colorBar.AbsoluteSize.X, -5, 0, 0)
+        local hue = relativeX/colorBar.AbsoluteSize.X
+        _G.HeadColor = Color3.fromHSV(hue, 1, 1)
+    end
+end)
+
+---------------------------------------------------
+-- Buttons Logic
+---------------------------------------------------
+toggleBtn.MouseButton1Click:Connect(function()
+    _G.Disabled = not _G.Disabled
+    if _G.Disabled then
+        toggleBtn.Text = "Expand OFF"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+    else
+        toggleBtn.Text = "Expand ON"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+    end
+end)
+
+resetBtn.MouseButton1Click:Connect(function()
+    _G.HeadSize = 4
+    _G.HeadTransparency = 0.8
+    _G.HeadColor = Color3.fromRGB(180,0,255)
+    _G.Disabled = true
+
+    sizeHandle.Position = UDim2.new((_G.HeadSize)/30, -5, 0, 0)
+    sizeLabel.Text = "Head Size: " .. _G.HeadSize
+
+    transHandle.Position = UDim2.new(_G.HeadTransparency, -5, 0, 0)
+    transLabel.Text = "Transparency: " .. _G.HeadTransparency
+
+    colorHandle.Position = UDim2.new(0.7, -5, 0, 0)
+
+    toggleBtn.Text = "Expand OFF"
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+end)
