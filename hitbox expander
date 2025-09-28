@@ -160,6 +160,13 @@ colorHandle.Position = UDim2.new(0.7, -5, 0, 0) -- start on purple
 colorHandle.BackgroundColor3 = Color3.fromRGB(255,255,255)
 colorHandle.Parent = colorBar
 
+-- === Toggle GUI with keybind (RightShift) ===
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.RightShift then
+        mainFrame.Visible = not mainFrame.Visible
+    end
+end)
+
 ---------------------------------------------------
 -- Dragging Logic
 ---------------------------------------------------
