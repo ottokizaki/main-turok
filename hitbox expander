@@ -5,8 +5,6 @@ local UserInputService = game:GetService("UserInputService")
 
 -- Global settings
 _G.HeadSize = 4
-_G.HeadTransparency = 0.8
-_G.HeadColor = Color3.fromRGB(180, 0, 255) -- default violet
 _G.Disabled = true
 
 -- Function to expand head hitboxes
