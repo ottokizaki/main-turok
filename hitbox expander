@@ -5,7 +5,8 @@ local UserInputService = game:GetService("UserInputService")
 
 -- Global settings
 _G.HeadSize = 4
-_G.Disabled = true
+_G.HeadTransparency = 0.8
+_G.Enabled = false
 
 -- Function to expand head hitboxes
 local function expandHeads()
