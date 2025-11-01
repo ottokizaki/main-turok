@@ -1,0 +1,300 @@
+-- Smart Auto-Farm LocalScript (Hold Interaction 1s + Alternating Pickup/Dropoff)
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local root = character:WaitForChild("HumanoidRootPart")
+local StarterGui = player:WaitForChild("PlayerGui")
+
+-- GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SmartAutoFarmGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = StarterGui
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 160, 0, 50)
+toggleBtn.Position = UDim2.new(0, 20, 0, 100)
+toggleBtn.Text = "Auto-Farm: OFF"
+toggleBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+toggleBtn.Parent = screenGui
+
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(0, 300, 0, 30)
+status.Position = UDim2.new(0, 200, 0, 100)
+status.Text = "Status: Idle"
+status.TextXAlignment = Enum.TextXAlignment.Left
+status.Parent = screenGui
+
+-- Progress bar container
+local barContainer = Instance.new("Frame")
+barContainer.Size = UDim2.new(0, 220, 0, 22)
+barContainer.Position = UDim2.new(0, 20, 0, 170)
+barContainer.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+barContainer.BorderSizePixel = 0
+barContainer.Visible = false
+barContainer.Parent = screenGui
+
+local barFill = Instance.new("Frame")
+barFill.Size = UDim2.new(0, 0, 1, 0)
+barFill.Position = UDim2.new(0, 0, 0, 0)
+barFill.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+barFill.BorderSizePixel = 0
+barFill.Parent = barContainer
+
+local barLabel = Instance.new("TextLabel")
+barLabel.Size = UDim2.new(1, 0, 1, 0)
+barLabel.Position = UDim2.new(0, 0, 0, 0)
+barLabel.BackgroundTransparency = 1
+barLabel.Text = ""
+barLabel.Parent = barContainer
+
+-- Settings
+local HOLD_TIME = 0.7              -- seconds to hold E (changed to 1)
+local SEARCH_RANGE = 16          -- how far we'll look for prompts
+local TELEPORT_APPROACH_OFFSET = 3 -- how far in front of prompt to teleport so player is inside activation range
+local autoFarmEnabled = false
+local loopRunning = false
+
+-- Pickup / Dropoff CFrames (from your earlier values)
+local TELEPORT_PICKUP = CFrame.new(-199.2213134765625, 20.194096565246582, 1306.8973388671875)
+local TELEPORT_DROPOFF = CFrame.new(-191.41773986816406, 33.416608810424805, 1230.60107421875)
+local TELEPORT_SETTLE = 0.18 -- short wait after teleport
+
+-- Update character/root on respawn
+player.CharacterAdded:Connect(function(char)
+	character = char
+	root = char:WaitForChild("HumanoidRootPart")
+end)
+
+-- Helper: get a usable position (Vector3) for a prompt's parent
+local function getPromptPosition(prompt)
+	if not prompt or not prompt.Parent then return nil end
+	local parent = prompt.Parent
+
+	-- If parent is a BasePart, use its Position
+	if parent:IsA("BasePart") then
+		return parent.Position, parent
+	end
+
+	-- If parent is a Model, prefer PrimaryPart
+	if parent:IsA("Model") then
+		if parent.PrimaryPart then
+			return parent.PrimaryPart.Position, parent.PrimaryPart
+		end
+		-- fallback: find first BasePart descendant
+		local p = parent:FindFirstChildWhichIsA("BasePart", true)
+		if p then return p.Position, p end
+	end
+
+	-- If parent is an Attachment or something nested, search upward or descendants for a BasePart
+	local up = parent
+	while up and not up:IsA("BasePart") and up.Parent do
+		up = up.Parent
+		if up:IsA("BasePart") then
+			return up.Position, up
+		end
+	end
+
+	-- last resort: find any BasePart descendant
+	local anyPart = prompt.Parent:FindFirstChildWhichIsA("BasePart", true)
+	if anyPart then
+		return anyPart.Position, anyPart
+	end
+
+	return nil
+end
+
+-- Find the closest prompt and return (prompt, promptPositionPart)
+local function findClosestPrompt(range)
+	local bestPrompt = nil
+	local bestPart = nil
+	local bestDist = range
+
+	for _, v in ipairs(workspace:GetDescendants()) do
+		if v:IsA("ProximityPrompt") then
+			local pos, part = getPromptPosition(v)
+			if pos and part and root then
+				local dist = (pos - root.Position).Magnitude
+				if dist < bestDist then
+					bestDist = dist
+					bestPrompt = v
+					bestPart = part
+				end
+			end
+		end
+	end
+
+	return bestPrompt, bestPart, bestDist
+end
+
+-- Move player to a spot near the prompt so interaction succeeds (keeps player a little in front)
+local function movePlayerNear(part)
+	if not part or not root then return end
+
+	local partCFrame = part.CFrame
+	-- Approach direction: from part towards the player, or use part's lookVector
+	local approachDir = (root.Position - part.Position)
+	if approachDir.Magnitude < 0.5 then
+		approachDir = partCFrame.LookVector
+	else
+		approachDir = approachDir.Unit
+	end
+
+	-- Position a bit in front of the part so player sits within activation distance
+	local targetPos = part.Position + (approachDir * TELEPORT_APPROACH_OFFSET)
+	-- Keep player at same Y offset relative to the part to avoid burying in ground
+	targetPos = Vector3.new(targetPos.X, part.Position.Y + 1.5, targetPos.Z)
+
+	-- Teleport
+	root.CFrame = CFrame.new(targetPos, part.Position)
+	task.wait(0.12) -- short settle
+end
+
+-- Progress bar helper: animate fill from 0 -> 1 over duration; returns true if completed, false if cancelled
+local function showHoldProgress(duration)
+	barContainer.Visible = true
+	barFill.Size = UDim2.new(0, 0, 1, 0)
+	barLabel.Text = string.format("Holding: %.1fs", duration)
+	local elapsed = 0
+	local step = 0.05
+
+	while elapsed < duration do
+		if not autoFarmEnabled then -- cancelled externally
+			barContainer.Visible = false
+			return false
+		end
+		elapsed = elapsed + step
+		local frac = math.clamp(elapsed / duration, 0, 1)
+		barFill.Size = UDim2.new(frac, 0, 1, 0)
+		barLabel.Text = string.format("Holding: %.1fs", math.max(0, duration - elapsed))
+		task.wait(step)
+	end
+
+	-- fill complete
+	barFill.Size = UDim2.new(1, 0, 1, 0)
+	barLabel.Text = "Done"
+	task.wait(0.12)
+	barContainer.Visible = false
+	return true
+end
+
+-- Hold prompt using InputHoldBegin / InputHoldEnd and show progress
+local function holdPrompt(prompt)
+	if not prompt then return false end
+	local success = false
+
+	-- Set HoldDuration to match (some games check it)
+	pcall(function() prompt.HoldDuration = HOLD_TIME end)
+
+	-- Begin hold and show progress
+	local ok, err = pcall(function()
+		prompt:InputHoldBegin()
+	end)
+
+	if not ok then
+		-- Could not call InputHoldBegin (maybe not allowed); fallback to Trigger
+		pcall(function() prompt:Trigger() end)
+		return false
+	end
+
+	-- Show progress; if the progress was cancelled (e.g. autoFarm toggled off), stop early
+	local completed = showHoldProgress(HOLD_TIME)
+
+	-- End hold (only if InputHoldBegin succeeded)
+	pcall(function() prompt:InputHoldEnd() end)
+
+	if completed then
+		success = true
+	end
+
+	return success
+end
+
+-- Interact with a prompt reliably (uses holdPrompt)
+local function interactPromptReliable(prompt, promptPart)
+	if not prompt then return false end
+
+	-- Ensure prompt is enabled
+	pcall(function() prompt.Enabled = true end)
+
+	-- Move to prompt if needed
+	local pos, _ = getPromptPosition(prompt)
+	if pos and root then
+		local dist = (pos - root.Position).Magnitude
+		local maxDist = prompt.MaxActivationDistance or SEARCH_RANGE
+		if dist > math.min(SEARCH_RANGE, maxDist) then
+			movePlayerNear(promptPart or prompt.Parent)
+		end
+	end
+
+	-- Actually HOLD the prompt instead of instant Trigger
+	local ok, res = pcall(function()
+		return holdPrompt(prompt)
+	end)
+
+	return ok and res
+end
+
+-- The auto-farm loop (alternates pickup -> dropoff)
+local function autoFarmLoop()
+	if loopRunning then return end
+	loopRunning = true
+	status.Text = "Status: Auto-Farm running"
+
+	while autoFarmEnabled do
+		if not root or not root.Parent then
+			status.Text = "Status: Waiting for character..."
+			task.wait(0.5)
+		else
+			-- TELEPORT TO PICKUP
+			root.CFrame = TELEPORT_PICKUP
+			task.wait(TELEPORT_SETTLE)
+
+			-- find and interact with prompt near pickup
+			local prompt, part = findClosestPrompt(SEARCH_RANGE)
+			if prompt then
+				status.Text = "Status: Holding (Pickup)..."
+				pcall(interactPromptReliable, prompt, part)
+			else
+				status.Text = "Status: No Pickup prompt found"
+			end
+
+			-- small buffer
+			task.wait(0.18)
+
+			-- TELEPORT TO DROPOFF
+			root.CFrame = TELEPORT_DROPOFF
+			task.wait(TELEPORT_SETTLE)
+
+			-- find and interact with prompt near dropoff
+			local prompt2, part2 = findClosestPrompt(SEARCH_RANGE)
+			if prompt2 then
+				status.Text = "Status: Holding (Dropoff)..."
+				pcall(interactPromptReliable, prompt2, part2)
+			else
+				status.Text = "Status: No Dropoff prompt found"
+			end
+
+			-- little buffer before next cycle
+			task.wait(0.25)
+		end
+	end
+
+	status.Text = "Status: Idle"
+	loopRunning = false
+end
+
+-- Toggle button behavior
+toggleBtn.MouseButton1Click:Connect(function()
+	autoFarmEnabled = not autoFarmEnabled
+	if autoFarmEnabled then
+		toggleBtn.Text = "Auto-Farm: ON"
+		toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+		task.spawn(autoFarmLoop)
+	else
+		toggleBtn.Text = "Auto-Farm: OFF"
+		toggleBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+		-- make sure progress bar hides if turned off mid-hold
+		barContainer.Visible = false
+	end
+end)
