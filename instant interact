@@ -1,0 +1,16 @@
+local Workspace = game:GetService("Workspace")
+local function updateProximityPrompts()
+for _, instance in ipairs(Workspace:GetDescendants()) do
+if instance:IsA("ProximityPrompt") then
+instance.HoldDuration = 0
+end
+end
+end
+Workspace.DescendantAdded:Connect(function(descendant)
+ if descendant:IsA("ProximityPrompt") then
+descendant.HoldDuration = 0
+end
+end)
+updateProximityPrompts()
+   end,
+})
