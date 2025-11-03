@@ -1,7 +1,4 @@
-if game.GameId == 113491250 then
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/Mick-gordon/Hyper-Escape/main/HyperEscapePhantomForces.lua", true))()
-else
-	local HyperEscape = { -- fuck Off I Like It, Even Tho It Is Anoying.
+local HyperEscape = { -- fuck Off I Like It, Even Tho It Is Anoying.
 		GUI = {
 			GUIButton = true;
 			GUIToggleKey = Enum.KeyCode.RightShift;
