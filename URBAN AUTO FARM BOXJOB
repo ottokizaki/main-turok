@@ -49,7 +49,7 @@ barLabel.Text = ""
 barLabel.Parent = barContainer
 
 -- Settings
-local HOLD_TIME = 0.4              -- seconds to hold E (changed to 1)
+local HOLD_TIME = 0.1              -- seconds to hold E (changed to 0.1)
 local SEARCH_RANGE = 16          -- how far we'll look for prompts
 local TELEPORT_APPROACH_OFFSET = 3 -- how far in front of prompt to teleport so player is inside activation range
 local autoFarmEnabled = false
