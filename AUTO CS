@@ -1,0 +1,330 @@
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local root = character:WaitForChild("HumanoidRootPart")
+local StarterGui = player:WaitForChild("PlayerGui")
+
+-- GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SmartAutoFarmGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = StarterGui
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 160, 0, 40)
+toggleBtn.Position = UDim2.new(0, 20, 0, 80)
+toggleBtn.Text = "Auto-Farm: OFF"
+toggleBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+toggleBtn.Parent = screenGui
+
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(0, 360, 0, 28)
+status.Position = UDim2.new(0, 200, 0, 80)
+status.Text = "Status: Idle"
+status.TextXAlignment = Enum.TextXAlignment.Left
+status.Parent = screenGui
+
+-- Area selection UI
+local areaLabel = Instance.new("TextLabel")
+areaLabel.Size = UDim2.new(0, 120, 0, 30)
+areaLabel.Position = UDim2.new(0, 20, 0, 20)
+areaLabel.Text = "Area: 1 / 19"
+areaLabel.Parent = screenGui
+
+local prevBtn = Instance.new("TextButton")
+prevBtn.Size = UDim2.new(0, 50, 0, 30)
+prevBtn.Position = UDim2.new(0, 150, 0, 20)
+prevBtn.Text = "<"
+prevBtn.Parent = screenGui
+
+local nextBtn = Instance.new("TextButton")
+nextBtn.Size = UDim2.new(0, 50, 0, 30)
+nextBtn.Position = UDim2.new(0, 210, 0, 20)
+nextBtn.Text = ">"
+nextBtn.Parent = screenGui
+
+local autoCycleBtn = Instance.new("TextButton")
+autoCycleBtn.Size = UDim2.new(0, 120, 0, 30)
+autoCycleBtn.Position = UDim2.new(0, 270, 0, 20)
+autoCycleBtn.Text = "AutoCycle: OFF"
+autoCycleBtn.Parent = screenGui
+
+-- Progress bar container
+local barContainer = Instance.new("Frame")
+barContainer.Size = UDim2.new(0, 220, 0, 22)
+barContainer.Position = UDim2.new(0, 20, 0, 140)
+barContainer.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+barContainer.BorderSizePixel = 0
+barContainer.Visible = false
+barContainer.Parent = screenGui
+
+local barFill = Instance.new("Frame")
+barFill.Size = UDim2.new(0, 0, 1, 0)
+barFill.Position = UDim2.new(0, 0, 0, 0)
+barFill.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+barFill.BorderSizePixel = 0
+barFill.Parent = barContainer
+
+local barLabel = Instance.new("TextLabel")
+barLabel.Size = UDim2.new(1, 0, 1, 0)
+barLabel.Position = UDim2.new(0, 0, 0, 0)
+barLabel.BackgroundTransparency = 1
+barLabel.Text = ""
+barLabel.Parent = barContainer
+
+-- Settings
+local HOLD_TIME = 0.1              -- seconds to hold E (your original change)
+local SEARCH_RANGE = 16
+local TELEPORT_APPROACH_OFFSET = 3
+local autoFarmEnabled = false
+local loopRunning = false
+local autoCycle = false
+local currentAreaIndex = 1
+local AREA_COUNT = 19
+
+-- Short settle after teleport
+local TELEPORT_SETTLE = 0.18
+
+-- Areas table: each entry is { Pickup = CFrame, Dropoff = CFrame }
+-- Replace placeholder CFrame values with actual coordinates for your map.
+local AREAS = {
+	[1] = { Pickup = CFrame.new(440.62176513671875, 17.193124771118164, 1150.3275146484375),
+			Dropoff = CFrame.new(397.2384033203125, 17.193124771118164, 1151.7950439453125) },
+	-- Replace these 2..19 with real coordinates
+	[2] = { Pickup = CFrame.new(346.2164001464844, 17.193124771118164, 1150.9302978515625), Dropoff = CFrame.new(412.237548828125, 17.193124771118164, 1125.5596923828125) },
+	[3] = { Pickup = CFrame.new(367.5516357421875, 17.193124771118164, 1125.5596923828125), Dropoff = CFrame.new(442.92572021484375, 17.193124771118164, 992.8255615234375) },
+	[4] = { Pickup = CFrame.new(438.8114013671875, 17.193124771118164, 1104.6414794921875), Dropoff = CFrame.new(459.6056823730469, 17.193124771118164, 967.8623657226562) },
+	[5] = { Pickup = CFrame.new(390.3092041015625, 17.193124771118164, 1104.6414794921875), Dropoff = CFrame.new(397.21429443359375, 17.193124771118164, 992.8255615234375) },
+	[6] = { Pickup = CFrame.new(347.05029296875, 17.193124771118164, 1104.6414794921875), Dropoff = CFrame.new(357.94091796875, 17.193124771118164, 992.8255615234375) },
+	[7] = { Pickup = CFrame.new(414.4371643066406, 17.193124771118164, 1085.364013671875), Dropoff = CFrame.new(377.060791015625, 17.193124771118164, 1025.8521728515625) },
+	[8] = { Pickup = CFrame.new(443.2120056152344, 17.193124771118164, 1054.4864501953125), Dropoff = CFrame.new(344.35223388671875, 17.193124771118164, 1034.0191650390625) },
+	[9] = { Pickup = CFrame.new(400.66241455078125, 17.193124771118164, 1054.4864501953125), Dropoff = CFrame.new(361.452880859375, 17.193124771118164, 1065.73046875) },
+}
+
+-- helpers
+player.CharacterAdded:Connect(function(char)
+	character = char
+	root = char:WaitForChild("HumanoidRootPart")
+end)
+
+local function updateAreaLabel()
+	areaLabel.Text = string.format("Area: %d / %d", currentAreaIndex, AREA_COUNT)
+end
+updateAreaLabel()
+
+prevBtn.MouseButton1Click:Connect(function()
+	currentAreaIndex = currentAreaIndex - 1
+	if currentAreaIndex < 1 then currentAreaIndex = AREA_COUNT end
+	updateAreaLabel()
+end)
+
+nextBtn.MouseButton1Click:Connect(function()
+	currentAreaIndex = currentAreaIndex + 1
+	if currentAreaIndex > AREA_COUNT then currentAreaIndex = 1 end
+	updateAreaLabel()
+end)
+
+autoCycleBtn.MouseButton1Click:Connect(function()
+	autoCycle = not autoCycle
+	autoCycleBtn.Text = autoCycle and "AutoCycle: ON" or "AutoCycle: OFF"
+end)
+
+-- Reuse your prompt helpers (slightly cleaned up)
+
+local function getPromptPosition(prompt)
+	if not prompt or not prompt.Parent then return nil end
+	local parent = prompt.Parent
+	if parent:IsA("BasePart") then
+		return parent.Position, parent
+	end
+	if parent:IsA("Model") then
+		if parent.PrimaryPart then return parent.PrimaryPart.Position, parent.PrimaryPart end
+		local p = parent:FindFirstChildWhichIsA("BasePart", true)
+		if p then return p.Position, p end
+	end
+	local up = parent
+	while up and not up:IsA("BasePart") and up.Parent do
+		up = up.Parent
+		if up:IsA("BasePart") then return up.Position, up end
+	end
+	local anyPart = prompt.Parent:FindFirstChildWhichIsA("BasePart", true)
+	if anyPart then return anyPart.Position, anyPart end
+	return nil
+end
+
+local function findClosestPrompt(range)
+	local bestPrompt, bestPart, bestDist = nil, nil, range
+	for _, v in ipairs(workspace:GetDescendants()) do
+		if v:IsA("ProximityPrompt") then
+			local pos, part = getPromptPosition(v)
+			if pos and part and root then
+				local dist = (pos - root.Position).Magnitude
+				if dist < bestDist then
+					bestDist = dist
+					bestPrompt = v
+					bestPart = part
+				end
+			end
+		end
+	end
+	return bestPrompt, bestPart, bestDist
+end
+
+local function movePlayerNear(part)
+	if not part or not root then return end
+	local partCFrame = part.CFrame
+	local approachDir = (root.Position - part.Position)
+	if approachDir.Magnitude < 0.5 then
+		approachDir = partCFrame.LookVector
+	else
+		approachDir = approachDir.Unit
+	end
+	local targetPos = part.Position + (approachDir * TELEPORT_APPROACH_OFFSET)
+	targetPos = Vector3.new(targetPos.X, part.Position.Y + 1.5, targetPos.Z)
+	root.CFrame = CFrame.new(targetPos, part.Position)
+	task.wait(0.12)
+end
+
+local function showHoldProgress(duration)
+	barContainer.Visible = true
+	barFill.Size = UDim2.new(0, 0, 1, 0)
+	barLabel.Text = string.format("Holding: %.1fs", duration)
+	local elapsed = 0
+	local step = 0.05
+	while elapsed < duration do
+		if not autoFarmEnabled then
+			barContainer.Visible = false
+			return false
+		end
+		elapsed = elapsed + step
+		local frac = math.clamp(elapsed / duration, 0, 1)
+		barFill.Size = UDim2.new(frac, 0, 1, 0)
+		barLabel.Text = string.format("Holding: %.1fs", math.max(0, duration - elapsed))
+		task.wait(step)
+	end
+	barFill.Size = UDim2.new(1, 0, 1, 0)
+	barLabel.Text = "Done"
+	task.wait(0.12)
+	barContainer.Visible = false
+	return true
+end
+
+local function holdPrompt(prompt)
+	if not prompt then return false end
+	pcall(function() prompt.HoldDuration = HOLD_TIME end)
+	local ok, err = pcall(function() prompt:InputHoldBegin() end)
+	if not ok then
+		-- fallback to Trigger if InputHoldBegin blocked
+		pcall(function() prompt:Trigger() end)
+		return false
+	end
+	local completed = showHoldProgress(HOLD_TIME)
+	pcall(function() prompt:InputHoldEnd() end)
+	return completed
+end
+
+local function interactPromptReliable(prompt, promptPart)
+	if not prompt then return false end
+	pcall(function() prompt.Enabled = true end)
+	local pos, _ = getPromptPosition(prompt)
+	if pos and root then
+		local dist = (pos - root.Position).Magnitude
+		local maxDist = prompt.MaxActivationDistance or SEARCH_RANGE
+		if dist > math.min(SEARCH_RANGE, maxDist) then
+			movePlayerNear(promptPart or prompt.Parent)
+		end
+	end
+	local ok, res = pcall(function()
+		return holdPrompt(prompt)
+	end)
+	return ok and res
+end
+
+-- Teleport helpers that use the AREAS table
+local function teleportToAreaPickup(index)
+	local entry = AREAS[index]
+	if not entry then return end
+	if entry.Pickup then
+		root.CFrame = entry.Pickup
+		task.wait(TELEPORT_SETTLE)
+	end
+end
+
+local function teleportToAreaDropoff(index)
+	local entry = AREAS[index]
+	if not entry then return end
+	if entry.Dropoff then
+		root.CFrame = entry.Dropoff
+		task.wait(TELEPORT_SETTLE)
+	end
+end
+
+-- The main loop: uses currentAreaIndex; if autoCycle true then advances area after completing both pickup/dropoff
+local function autoFarmLoop()
+	if loopRunning then return end
+	loopRunning = true
+	status.Text = "Status: Auto-Farm running"
+
+	while autoFarmEnabled do
+		if not root or not root.Parent then
+			status.Text = "Status: Waiting for character..."
+			task.wait(0.5)
+		else
+			local idx = currentAreaIndex
+			status.Text = string.format("Status: Teleporting to Area %d (Pickup)", idx)
+
+			-- TELEPORT TO PICKUP
+			teleportToAreaPickup(idx)
+
+			-- find and interact with prompt near pickup
+			local prompt, part = findClosestPrompt(SEARCH_RANGE)
+			if prompt then
+				status.Text = string.format("Status: Holding (Pickup) Area %d...", idx)
+				pcall(interactPromptReliable, prompt, part)
+			else
+				status.Text = string.format("Status: No Pickup prompt found (Area %d)", idx)
+			end
+
+			task.wait(0.18)
+
+			-- TELEPORT TO DROPOFF
+			status.Text = string.format("Status: Teleporting to Area %d (Dropoff)", idx)
+			teleportToAreaDropoff(idx)
+
+			local prompt2, part2 = findClosestPrompt(SEARCH_RANGE)
+			if prompt2 then
+				status.Text = string.format("Status: Holding (Dropoff) Area %d...", idx)
+				pcall(interactPromptReliable, prompt2, part2)
+			else
+				status.Text = string.format("Status: No Dropoff prompt found (Area %d)", idx)
+			end
+
+			-- small buffer
+			task.wait(0.25)
+
+			-- advance area if autoCycle
+			if autoCycle then
+				currentAreaIndex = currentAreaIndex + 1
+				if currentAreaIndex > AREA_COUNT then currentAreaIndex = 1 end
+				updateAreaLabel()
+			end
+		end
+	end
+
+	status.Text = "Status: Idle"
+	loopRunning = false
+end
+
+-- Toggle button behavior
+toggleBtn.MouseButton1Click:Connect(function()
+	autoFarmEnabled = not autoFarmEnabled
+	if autoFarmEnabled then
+		toggleBtn.Text = "Auto-Farm: ON"
+		toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+		task.spawn(autoFarmLoop)
+	else
+		toggleBtn.Text = "Auto-Farm: OFF"
+		toggleBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+		barContainer.Visible = false
+	end
+end)
