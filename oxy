@@ -1,0 +1,3 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local buyRemote = ReplicatedStorage:WaitForChild("OxyComplete")
+buyRemote:FireServer("OxyComplete", 1)
